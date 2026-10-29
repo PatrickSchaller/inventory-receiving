@@ -1,5 +1,7 @@
 # Inventory Receiving
 
+[![Checks](https://github.com/PatrickSchaller/inventory-receiving/actions/workflows/checks.yml/badge.svg)](https://github.com/PatrickSchaller/inventory-receiving/actions/workflows/checks.yml)
+
 A small .NET and React application for receiving stock, recording corrections, and explaining how an item's balance changed.
 
 The interesting part is what happens when a delivery is submitted twice, one line is invalid, or two people try to correct the same stock. Those cases are exercised against a real SQLite database.
