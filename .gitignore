@@ -1,0 +1,17 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/wwwroot/
+**/data/
+**/data.backup/
+client/playwright-report/
+client/test-results/
+.vs/
+.idea/
+*.user
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example

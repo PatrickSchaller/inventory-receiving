@@ -1,0 +1,38 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Restore locked .NET dependencies
+        run: dotnet restore InventoryReceiving.slnx --locked-mode
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+      - name: Build client and check TypeScript
+        working-directory: client
+        run: npm run build
+      - name: Verify API and database behavior
+        run: dotnet test InventoryReceiving.slnx --no-restore --configuration Release
+      - name: Install Chromium
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser workflows
+        working-directory: client
+        run: npm test
