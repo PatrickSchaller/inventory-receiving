@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore the Inventory Receiving ASP.NET Core API: its OpenAPI contract, receipt replay, validation and concurrency behavior.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Inventory Receiving API | Patrick Schaller</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="vendor/swagger-ui.css">
+  <link rel="stylesheet" href="reference.css">
+  <script src="vendor/swagger-ui-bundle.js" defer></script>
+  <script src="reference.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#swagger-ui">Skip to API operations</a>
+  <header class="reference-header">
+    <a href="https://patrickschaller.github.io/#api">Patrick Schaller / API showcase</a>
+    <a href="https://github.com/PatrickSchaller/inventory-receiving">View source</a>
+  </header>
+  <main>
+    <section class="reference-intro" aria-labelledby="reference-title">
+      <h1 id="reference-title">A contract you can inspect.</h1>
+      <p>Inventory Receiving pairs a React interface with an ASP.NET Core API. Explore its requests, response shapes, validation, replay protection and version checks.</p>
+      <p id="reference-mode" class="mode-note" role="status">Published reference: browse operations and schemas here. Request execution is available in the local app.</p>
+      <div class="reference-links">
+        <a id="openapi-link" href="openapi.json" download>Download OpenAPI JSON</a>
+        <a href="https://github.com/PatrickSchaller/inventory-receiving/blob/main/docs/api-reference/inventory.http">Runnable HTTP walkthrough</a>
+        <a href="https://github.com/PatrickSchaller/inventory-receiving#run-locally">Run the local app</a>
+      </div>
+      <details><summary>What should I look for?</summary><p>Send a receipt twice: the second result has <code>replayed: true</code> and stock stays unchanged. Change its quantity while keeping its reference: the API returns <code>409</code>. An adjustment also needs the current item version; stale corrections return <code>409</code>.</p><p><code>X-Inventory-Client: stockroom</code> is a write-request marker, not authentication. This local demonstration does not implement production sign-in, OAuth scopes or public backend hosting.</p></details>
+    </section>
+    <div id="swagger-ui"></div>
+  </main>
+  <footer>Generated from the application endpoints. Swagger UI 5.34.0 is self-hosted under its Apache 2.0 license. No external validator or CDN is used.</footer>
+</body>
+</html>

@@ -1,0 +1,84 @@
+# Run in order against a NEW scratch database. These requests change demo stock.
+# VS Code REST Client or another HTTP-file client can send each request.
+# Keep the same reference for the receive/replay/conflict sequence.
+@baseUrl = http://127.0.0.1:5087
+@receiptReference = API-WALKTHROUGH-001
+
+### Read the starting balances and item versions
+# expect: 200
+GET {{baseUrl}}/api/items
+
+### Receive five handles: first submission commits once
+# expect: 200
+POST {{baseUrl}}/api/receipts
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"reference":"{{receiptReference}}","lines":[{"sku":"HW-104","quantity":5}]}
+
+### Repeat the same receipt: replayed=true, no additional stock
+# expect: 200
+POST {{baseUrl}}/api/receipts
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"reference":"{{receiptReference}}","lines":[{"sku":"HW-104","quantity":5}]}
+
+### Reuse the reference with a different quantity: conflict
+# expect: 409
+POST {{baseUrl}}/api/receipts
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"reference":"{{receiptReference}}","lines":[{"sku":"HW-104","quantity":6}]}
+
+### Reject a zero receipt quantity before writing
+# expect: 400
+POST {{baseUrl}}/api/receipts
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"reference":"INVALID-QUANTITY","lines":[{"sku":"HW-104","quantity":0}]}
+
+### Reject a write without the explicit client marker (not a sign-in failure)
+# expect: 403
+POST {{baseUrl}}/api/receipts
+Content-Type: application/json
+
+{"reference":"MISSING-MARKER","lines":[{"sku":"HW-104","quantity":1}]}
+
+### Reject an unknown item without creating a receipt
+# expect: 404
+POST {{baseUrl}}/api/receipts
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"reference":"UNKNOWN-ITEM","lines":[{"sku":"DOES-NOT-EXIST","quantity":1}]}
+
+### Correct stock using version 1, obtained after the successful receipt above
+# expect: 204
+POST {{baseUrl}}/api/adjustments
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"sku":"HW-104","delta":-2,"expectedVersion":1,"reason":"Two handles damaged during inspection"}
+
+### Repeat a correction with the old version: conflict, no second adjustment
+# expect: 409
+POST {{baseUrl}}/api/adjustments
+Content-Type: application/json
+X-Inventory-Client: stockroom
+
+{"sku":"HW-104","delta":-2,"expectedVersion":1,"reason":"Two handles damaged during inspection"}
+
+### Final state: HW-104 quantity 13, version 2
+# expect: 200
+GET {{baseUrl}}/api/items
+
+### Review the opening balance, one receipt and one correction
+# expect: 200
+GET {{baseUrl}}/api/movements?sku=HW-104
+
+### Export the complete movement history
+# expect: 200
+GET {{baseUrl}}/api/movements/export?sku=HW-104

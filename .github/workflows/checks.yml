@@ -28,7 +28,7 @@ jobs:
       - name: Build client and check TypeScript
         working-directory: client
         run: npm run build
-      - name: Verify API and database behavior
+      - name: Verify API, database, and published contract
         run: dotnet test InventoryReceiving.slnx --no-restore --configuration Release
       - name: Install Chromium
         working-directory: client

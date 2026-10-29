@@ -1,0 +1,297 @@
+{
+  "recordedAtUtc": "2026-10-29T23:19:21.3705141\u002B00:00",
+  "description": "Actual responses from the ordered HTTP walkthrough against a new synthetic test database. This is not a live public API.",
+  "requests": [
+    {
+      "scenario": "Read the starting balances and item versions",
+      "method": "GET",
+      "path": "/api/items",
+      "request": null,
+      "status": 200,
+      "contentType": "application/json",
+      "response": [
+        {
+          "sku": "HW-104",
+          "name": "Brass cabinet handle",
+          "quantity": 10,
+          "reorderPoint": 12,
+          "version": 0
+        },
+        {
+          "sku": "HW-208",
+          "name": "Steel corner bracket",
+          "quantity": 24,
+          "reorderPoint": 10,
+          "version": 0
+        },
+        {
+          "sku": "WD-310",
+          "name": "Birch plywood panel",
+          "quantity": 8,
+          "reorderPoint": 4,
+          "version": 0
+        },
+        {
+          "sku": "WD-415",
+          "name": "Oak dowel, 12 mm",
+          "quantity": 36,
+          "reorderPoint": 12,
+          "version": 0
+        }
+      ]
+    },
+    {
+      "scenario": "Receive five handles: first submission commits once",
+      "method": "POST",
+      "path": "/api/receipts",
+      "request": {
+        "reference": "API-WALKTHROUGH-001",
+        "lines": [
+          {
+            "sku": "HW-104",
+            "quantity": 5
+          }
+        ]
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "response": {
+        "reference": "API-WALKTHROUGH-001",
+        "createdAt": "2026-10-29T23:19:21.2828158\u002B00:00",
+        "replayed": false
+      }
+    },
+    {
+      "scenario": "Repeat the same receipt: replayed=true, no additional stock",
+      "method": "POST",
+      "path": "/api/receipts",
+      "request": {
+        "reference": "API-WALKTHROUGH-001",
+        "lines": [
+          {
+            "sku": "HW-104",
+            "quantity": 5
+          }
+        ]
+      },
+      "status": 200,
+      "contentType": "application/json",
+      "response": {
+        "reference": "API-WALKTHROUGH-001",
+        "createdAt": "2026-10-29T23:19:21.2828158\u002B00:00",
+        "replayed": true
+      }
+    },
+    {
+      "scenario": "Reuse the reference with a different quantity: conflict",
+      "method": "POST",
+      "path": "/api/receipts",
+      "request": {
+        "reference": "API-WALKTHROUGH-001",
+        "lines": [
+          {
+            "sku": "HW-104",
+            "quantity": 6
+          }
+        ]
+      },
+      "status": 409,
+      "contentType": "application/problem\u002Bjson",
+      "response": {
+        "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+        "title": "Conflict",
+        "status": 409,
+        "detail": "This receipt reference was already used with different items or quantities."
+      }
+    },
+    {
+      "scenario": "Reject a zero receipt quantity before writing",
+      "method": "POST",
+      "path": "/api/receipts",
+      "request": {
+        "reference": "INVALID-QUANTITY",
+        "lines": [
+          {
+            "sku": "HW-104",
+            "quantity": 0
+          }
+        ]
+      },
+      "status": 400,
+      "contentType": "application/problem\u002Bjson",
+      "response": {
+        "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+        "title": "Bad Request",
+        "status": 400,
+        "detail": "Each receipt quantity must be a whole number between 1 and 100,000."
+      }
+    },
+    {
+      "scenario": "Reject a write without the explicit client marker (not a sign-in failure)",
+      "method": "POST",
+      "path": "/api/receipts",
+      "request": {
+        "reference": "MISSING-MARKER",
+        "lines": [
+          {
+            "sku": "HW-104",
+            "quantity": 1
+          }
+        ]
+      },
+      "status": 403,
+      "contentType": "application/problem\u002Bjson",
+      "response": {
+        "type": "https://tools.ietf.org/html/rfc9110#section-15.5.4",
+        "title": "Forbidden",
+        "status": 403,
+        "detail": "The request must come from the receiving client."
+      }
+    },
+    {
+      "scenario": "Reject an unknown item without creating a receipt",
+      "method": "POST",
+      "path": "/api/receipts",
+      "request": {
+        "reference": "UNKNOWN-ITEM",
+        "lines": [
+          {
+            "sku": "DOES-NOT-EXIST",
+            "quantity": 1
+          }
+        ]
+      },
+      "status": 404,
+      "contentType": "application/problem\u002Bjson",
+      "response": {
+        "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "Item \u0027DOES-NOT-EXIST\u0027 does not exist."
+      }
+    },
+    {
+      "scenario": "Correct stock using version 1, obtained after the successful receipt above",
+      "method": "POST",
+      "path": "/api/adjustments",
+      "request": {
+        "sku": "HW-104",
+        "delta": -2,
+        "expectedVersion": 1,
+        "reason": "Two handles damaged during inspection"
+      },
+      "status": 204,
+      "contentType": "",
+      "response": ""
+    },
+    {
+      "scenario": "Repeat a correction with the old version: conflict, no second adjustment",
+      "method": "POST",
+      "path": "/api/adjustments",
+      "request": {
+        "sku": "HW-104",
+        "delta": -2,
+        "expectedVersion": 1,
+        "reason": "Two handles damaged during inspection"
+      },
+      "status": 409,
+      "contentType": "application/problem\u002Bjson",
+      "response": {
+        "type": "https://tools.ietf.org/html/rfc9110#section-15.5.10",
+        "title": "Conflict",
+        "status": 409,
+        "detail": "Stock changed since you loaded it. Refresh stock, review the history, and try again."
+      }
+    },
+    {
+      "scenario": "Final state: HW-104 quantity 13, version 2",
+      "method": "GET",
+      "path": "/api/items",
+      "request": null,
+      "status": 200,
+      "contentType": "application/json",
+      "response": [
+        {
+          "sku": "HW-104",
+          "name": "Brass cabinet handle",
+          "quantity": 13,
+          "reorderPoint": 12,
+          "version": 2
+        },
+        {
+          "sku": "HW-208",
+          "name": "Steel corner bracket",
+          "quantity": 24,
+          "reorderPoint": 10,
+          "version": 0
+        },
+        {
+          "sku": "WD-310",
+          "name": "Birch plywood panel",
+          "quantity": 8,
+          "reorderPoint": 4,
+          "version": 0
+        },
+        {
+          "sku": "WD-415",
+          "name": "Oak dowel, 12 mm",
+          "quantity": 36,
+          "reorderPoint": 12,
+          "version": 0
+        }
+      ]
+    },
+    {
+      "scenario": "Review the opening balance, one receipt and one correction",
+      "method": "GET",
+      "path": "/api/movements?sku=HW-104",
+      "request": null,
+      "status": 200,
+      "contentType": "application/json",
+      "response": [
+        {
+          "id": 6,
+          "sku": "HW-104",
+          "itemName": "Brass cabinet handle",
+          "kind": "Adjustment",
+          "delta": -2,
+          "balance": 13,
+          "reference": "",
+          "note": "Two handles damaged during inspection",
+          "createdAt": "2026-10-29T23:19:21.3203911\u002B00:00"
+        },
+        {
+          "id": 5,
+          "sku": "HW-104",
+          "itemName": "Brass cabinet handle",
+          "kind": "Receipt",
+          "delta": 5,
+          "balance": 15,
+          "reference": "API-WALKTHROUGH-001",
+          "note": "",
+          "createdAt": "2026-10-29T23:19:21.2828158\u002B00:00"
+        },
+        {
+          "id": 1,
+          "sku": "HW-104",
+          "itemName": "Brass cabinet handle",
+          "kind": "Opening",
+          "delta": 10,
+          "balance": 10,
+          "reference": "DEMO-OPENING",
+          "note": "Invented opening balance",
+          "createdAt": "2026-10-29T23:19:21.2041592\u002B00:00"
+        }
+      ]
+    },
+    {
+      "scenario": "Export the complete movement history",
+      "method": "GET",
+      "path": "/api/movements/export?sku=HW-104",
+      "request": null,
+      "status": 200,
+      "contentType": "text/csv",
+      "response": "Timestamp,Sku,Item,Kind,Quantity change,Balance,Reference,Reason\r\n\u00222026-10-29T23:19:21.3203911\u002B00:00\u0022,\u0022HW-104\u0022,\u0022Brass cabinet handle\u0022,\u0022Adjustment\u0022,-2,13,\u0022\u0022,\u0022Two handles damaged during inspection\u0022\r\n\u00222026-10-29T23:19:21.2828158\u002B00:00\u0022,\u0022HW-104\u0022,\u0022Brass cabinet handle\u0022,\u0022Receipt\u0022,5,15,\u0022API-WALKTHROUGH-001\u0022,\u0022\u0022\r\n\u00222026-10-29T23:19:21.2041592\u002B00:00\u0022,\u0022HW-104\u0022,\u0022Brass cabinet handle\u0022,\u0022Opening\u0022,10,10,\u0022DEMO-OPENING\u0022,\u0022Invented opening balance\u0022\r\n"
+    }
+  ]
+}

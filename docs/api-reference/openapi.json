@@ -1,0 +1,737 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Inventory Receiving API",
+    "description": "A local-only ASP.NET Core portfolio API backed by SQLite and used by a React client. Receipt references provide durable replay protection; stock corrections use optimistic concurrency. Requests are limited to 32 KiB. X-Inventory-Client is an explicit client marker, not authentication. No production identity provider, OAuth scopes or public API hosting are included.",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/license/mit"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:5087",
+      "description": "Run the local demo to execute requests"
+    }
+  ],
+  "paths": {
+    "/api/items": {
+      "get": {
+        "tags": [
+          "Inventory"
+        ],
+        "summary": "List stock balances and versions",
+        "description": "Returns every item, ordered by code. Use the version in a subsequent stock correction.",
+        "operationId": "ListItems",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Item"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Wait one second, then retry the same receipt or refresh stock.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movements": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Read the latest 100 stock movements",
+        "description": "Optional sku filters by trimmed, uppercased item code. Unknown codes return an empty list. Newest movements appear first.",
+        "operationId": "ListMovements",
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Movement"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Wait one second, then retry the same receipt or refresh stock.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movements/export": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Export full movement history as CSV",
+        "description": "Optional sku filter. Includes all matching history, beyond the screen\u0027s 100-row limit. Formula-like text is neutralized for spreadsheet use.",
+        "operationId": "ExportMovements",
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Wait one second, then retry the same receipt or refresh stock.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/receipts": {
+      "post": {
+        "tags": [
+          "Receiving"
+        ],
+        "summary": "Receive stock, or safely replay a receipt",
+        "description": "One transaction applies all lines. A normalized reference and matching lines return 200 with replayed=true without adding stock. Reusing the reference with a different payload returns 409. Unknown items return 404; all lines roll back together.",
+        "operationId": "ReceiveStock",
+        "parameters": [
+          {
+            "name": "X-Inventory-Client",
+            "in": "header",
+            "description": "Must be stockroom. This client marker blocks ordinary cross-site form writes; it is not an API key or user identity.",
+            "required": true,
+            "schema": {
+              "enum": [
+                "stockroom"
+              ],
+              "type": "string",
+              "default": "stockroom"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiveRequest"
+              },
+              "example": {
+                "reference": "API-EXPLORER-001",
+                "lines": [
+                  {
+                    "sku": "HW-104",
+                    "quantity": 5
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Wait one second, then retry the same receipt or refresh stock.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/adjustments": {
+      "post": {
+        "tags": [
+          "Corrections"
+        ],
+        "summary": "Correct stock using the version you read",
+        "description": "Requires a nonzero change, a reason and the current item version. Returns 204 after committing. A stale version or a balance outside 0\u20131,000,000 returns 409. Adds a movement instead of editing history.",
+        "operationId": "AdjustStock",
+        "parameters": [
+          {
+            "name": "X-Inventory-Client",
+            "in": "header",
+            "description": "Must be stockroom. This client marker blocks ordinary cross-site form writes; it is not an API key or user identity.",
+            "required": true,
+            "schema": {
+              "enum": [
+                "stockroom"
+              ],
+              "type": "string",
+              "default": "stockroom"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustRequest"
+              },
+              "example": {
+                "sku": "HW-104",
+                "delta": -2,
+                "expectedVersion": 0,
+                "reason": "Count correction; copy the current version before sending"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "headers": {
+              "Retry-After": {
+                "description": "Wait one second, then retry the same receipt or refresh stock.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdjustRequest": {
+        "required": [
+          "sku",
+          "delta",
+          "expectedVersion",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "sku": {
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          },
+          "delta": {
+            "maximum": 100000,
+            "minimum": -100000,
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Nonzero stock change. Zero is rejected.",
+            "format": "int32"
+          },
+          "expectedVersion": {
+            "maximum": 9223372036854776000,
+            "minimum": 0,
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "Copy the current item version from GET /api/items. A stale version returns 409.",
+            "format": "int64"
+          },
+          "reason": {
+            "maxLength": 240,
+            "minLength": 1,
+            "type": "string"
+          }
+        }
+      },
+      "Item": {
+        "required": [
+          "sku",
+          "name",
+          "quantity",
+          "reorderPoint",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int32"
+          },
+          "reorderPoint": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int32"
+          },
+          "version": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "Movement": {
+        "required": [
+          "id",
+          "sku",
+          "itemName",
+          "kind",
+          "delta",
+          "balance",
+          "reference",
+          "note",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int64"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "itemName": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "delta": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int32"
+          },
+          "balance": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int32"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true
+              }
+            ],
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ReceiptLine": {
+        "required": [
+          "sku",
+          "quantity"
+        ],
+        "type": "object",
+        "properties": {
+          "sku": {
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string",
+            "description": "Item code; trimmed and uppercased before lookup."
+          },
+          "quantity": {
+            "maximum": 100000,
+            "minimum": 1,
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReceiptResult": {
+        "required": [
+          "reference",
+          "createdAt",
+          "replayed"
+        ],
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReceiveRequest": {
+        "required": [
+          "reference",
+          "lines"
+        ],
+        "type": "object",
+        "properties": {
+          "reference": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string",
+            "description": "Durable receipt identity, trimmed and uppercased. Reuse with the same lines to replay safely."
+          },
+          "lines": {
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptLine"
+            },
+            "description": "One to twenty non-null lines, with each item code present once."
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Inventory"
+    },
+    {
+      "name": "History"
+    },
+    {
+      "name": "Receiving"
+    },
+    {
+      "name": "Corrections"
+    }
+  ]
+}
