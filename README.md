@@ -8,6 +8,8 @@ This is an independent portfolio demonstration with invented data. It is intende
 
 ![Inventory receiving desk](docs/receiving-desk.png)
 
+[Watch the recorded walkthrough](docs/receiving-walkthrough.webm), including a duplicate receipt, a conflicting reference, and a stock correction. [Phone screenshot](docs/receiving-mobile.png).
+
 ## Run locally
 
 Requirements: the latest patched .NET 10 SDK and Node.js 22.12 or newer within the Node 22 release line, or a newer supported Node LTS version.
@@ -57,7 +59,7 @@ Stop manually running API and Vite processes before the browser tests; they star
 - **2 Chromium tests:** the receiving/correction/export flow with desktop and phone layouts, and an unavailable-service state. They also check for uncaught page errors and page overflow in the main workflow.
 - TypeScript checks and a production client build.
 
-The included GitHub Actions workflow runs these commands on Linux. Local verification was performed on Windows; hosted CI has not run until the repository is published.
+The included GitHub Actions workflow runs these commands on Linux. See [the validation record](docs/validation.md) for what was actually checked and the local test-environment limits.
 
 ## Design
 
